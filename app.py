@@ -3,58 +3,15 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
 from datetime import datetime, date
-import os
 import base64
 import requests
 
-
-REPO_OWNER = "ljbentertainment"
-REPO_NAME = "Daily-Log"
-FILE_PATH = "daily_log.csv"
-BRANCH = "main"  # or your branch name
-
-def get_file_sha():
-    url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    resp = requests.get(url, headers=headers)
-    if resp.status_code == 200:
-        return resp.json()["sha"]
-    else:
-        return None
-
-def update_csv_on_github(df, commit_message="Update daily_log.csv"):
-    url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-
-    sha = get_file_sha()
-    if not sha:
-        st.error("Failed to get file SHA from GitHub.")
-        return False
-
-    # Convert DataFrame to CSV string
-    csv_string = df.to_csv(index=False)
-
-    # Encode content in base64
-    content_encoded = base64.b64encode(csv_string.encode()).decode()
-
-    data = {
-        "message": commit_message,
-        "content": content_encoded,
-        "sha": sha,
-        "branch": BRANCH
-    }
-
-    response = requests.put(url, headers=headers, json=data)
-    if response.status_code == 200 or response.status_code == 201:
-        return True
-    else:
-        st.error(f"Failed to update file: {response.json()}")
-        return False
-
-
-
-
-
+# GitHub Info from Streamlit secrets
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+REPO_OWNER = st.secrets["REPO_OWNER"]
+REPO_NAME = st.secrets["REPO_NAME"]
+FILE_PATH = st.secrets["FILE_PATH"]
+BRANCH = st.secrets["BRANCH"]
 
 CSV_FILE = "daily_log.csv"
 
@@ -70,23 +27,59 @@ def hhmm_to_decimal(val):
         if isinstance(val, str) and ':' in val:
             h, m = map(int, val.split(':'))
             return round(h + m / 60, 2)
-        return float(val)  # in case it's already a number string
+        return float(val)
     except:
         return val
 
-# Load or create CSV
-if os.path.exists(CSV_FILE):
-    df = pd.read_csv(CSV_FILE)
-    df["Date"] = pd.to_datetime(df["Date"])
+# GitHub API helpers
+def get_file_sha():
+    url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    resp = requests.get(url, headers=headers)
+    if resp.status_code == 200:
+        return resp.json()["sha"]
+    return None
 
-    # Convert "Morning Wake Up Hour" column if it's in HH:MM string format
-    if "Morning Wake Up Hour" in df.columns:
-        df["Morning Wake Up Hour"] = df["Morning Wake Up Hour"].apply(hhmm_to_decimal)
-else:
-    df = pd.DataFrame(columns=COLUMNS)
-    df.to_csv(CSV_FILE, index=False)
+def upload_to_github(df, commit_message="Update daily_log.csv"):
+    csv_string = df.to_csv(index=False)
+    content_encoded = base64.b64encode(csv_string.encode()).decode()
+    sha = get_file_sha()
+    if not sha:
+        st.error("❌ Failed to fetch SHA from GitHub.")
+        return False
 
-# Set up Streamlit
+    url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    data = {
+        "message": commit_message,
+        "content": content_encoded,
+        "sha": sha,
+        "branch": BRANCH
+    }
+    response = requests.put(url, headers=headers, json=data)
+    if response.status_code in [200, 201]:
+        return True
+    else:
+        st.error(f"❌ GitHub upload failed: {response.json()}")
+        return False
+
+# Load from GitHub file
+def load_data():
+    url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/{FILE_PATH}"
+    try:
+        df = pd.read_csv(url)
+        df["Date"] = pd.to_datetime(df["Date"])
+        if "Morning Wake Up Hour" in df.columns:
+            df["Morning Wake Up Hour"] = df["Morning Wake Up Hour"].apply(hhmm_to_decimal)
+        return df
+    except Exception as e:
+        st.warning("⚠️ No data found or failed to load. Creating new DataFrame.")
+        return pd.DataFrame(columns=COLUMNS)
+
+# Load or initialize data
+df = load_data()
+
+# UI
 st.set_page_config(page_title="Daily Log", layout="wide")
 st.title("📊 Daily Log Tracker")
 
@@ -106,7 +99,7 @@ if not df.empty:
 else:
     st.info("No entries yet!")
 
-# Line charts
+# Line Charts
 if not filtered_df.empty:
     st.subheader("📈 Time-Based Charts")
     with col1:
@@ -121,7 +114,7 @@ if not filtered_df.empty:
         fig2.update_layout(title="Study Time", xaxis_title="Date", yaxis_title="Hours")
         st.plotly_chart(fig2, use_container_width=True)
 
-# Correlation heatmap
+# Correlation Heatmap
 if len(filtered_df) > 1:
     st.subheader("🔍 Correlation Heatmap")
     numeric_df = filtered_df.select_dtypes(include='number')
@@ -145,15 +138,15 @@ st.subheader("📝 Add New Entry")
 with st.form("log_form", clear_on_submit=True):
     entry_date = st.date_input("Date", value=date.today())
     
-    # Time inputs for Screen Time, Study Time, and Morning Wake Up Hour
-    screen_time_t = st.time_input("Screen Time (HH: MM) ", value=datetime.strptime("00:00", "%H:%M").time())
-    study_time_t = st.time_input("Study Time (HH: MM)", value=datetime.strptime("00:00", "%H:%M").time())
+    # Time inputs
+    screen_time_t = st.time_input("Screen Time (HH:MM)", value=datetime.strptime("00:00", "%H:%M").time())
+    study_time_t = st.time_input("Study Time (HH:MM)", value=datetime.strptime("00:00", "%H:%M").time())
     wakeup_time = st.time_input("Morning Wake Up Hour", value=datetime.strptime("08:00", "%H:%M").time())
 
     def time_to_decimal(t):
         return round(t.hour + t.minute / 60, 2)
 
-    # Convert time inputs to decimal hours
+    # Convert time inputs
     screen_time = time_to_decimal(screen_time_t)
     study_time = time_to_decimal(study_time_t)
     wakeup_decimal = time_to_decimal(wakeup_time)
@@ -183,6 +176,6 @@ if submitted:
     entry["Date"] = pd.to_datetime(entry["Date"])
     new_row = pd.DataFrame([entry])
     df = pd.concat([df, new_row], ignore_index=True)
-    df.to_csv(CSV_FILE, index=False)
-    st.success(f"✅ Entry for {entry['Date'].date()} saved!")
 
+    if upload_to_github(df):
+        st.success(f"✅ Entry for {entry['Date'].date()} saved to GitHub!")
