@@ -179,3 +179,5 @@ if submitted:
 
     if upload_to_github(df):
         st.success(f"✅ Entry for {entry['Date'].date()} saved to GitHub!")
+        df = load_data()
+
