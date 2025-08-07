@@ -83,54 +83,7 @@ df = load_data()
 st.set_page_config(page_title="Daily Log", layout="wide")
 st.title("📊 Daily Log Tracker")
 
-# Date filter
-col1, col2 = st.columns(2)
-with col1:
-    start_date = st.date_input("Start Date", df["Date"].min() if not df.empty else date.today())
-with col2:
-    end_date = st.date_input("End Date", df["Date"].max() if not df.empty else date.today())
 
-filtered_df = df[(df["Date"] >= pd.to_datetime(start_date)) & (df["Date"] <= pd.to_datetime(end_date))]
-
-# Recent Logs
-st.subheader("🕒 Recent Logs")
-if not df.empty:
-    st.dataframe(df.sort_values("Date", ascending=False).head(3), use_container_width=True)
-else:
-    st.info("No entries yet!")
-
-# Line Charts
-if not filtered_df.empty:
-    st.subheader("📈 Time-Based Charts")
-    with col1:
-        fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(x=filtered_df["Date"], y=filtered_df["Screen Time"], mode='lines+markers'))
-        fig1.update_layout(title="Screen Time", xaxis_title="Date", yaxis_title="Hours")
-        st.plotly_chart(fig1, use_container_width=True)
-
-    with col2:
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=filtered_df["Date"], y=filtered_df["Study Time"], mode='lines+markers'))
-        fig2.update_layout(title="Study Time", xaxis_title="Date", yaxis_title="Hours")
-        st.plotly_chart(fig2, use_container_width=True)
-
-# Correlation Heatmap
-if len(filtered_df) > 1:
-    st.subheader("🔍 Correlation Heatmap")
-    numeric_df = filtered_df.select_dtypes(include='number')
-    if not numeric_df.empty:
-        corr = numeric_df.corr()
-        heatmap = ff.create_annotated_heatmap(
-            z=corr.values,
-            x=list(corr.columns),
-            y=list(corr.index),
-            colorscale='RdBu',
-            showscale=True
-        )
-        heatmap.update_layout(title="Numerical Correlation Heatmap")
-        st.plotly_chart(heatmap, use_container_width=True)
-    else:
-        st.info("No numeric data to show correlation.")
 
 # Entry Form
 st.subheader("📝 Add New Entry")
@@ -181,3 +134,52 @@ if submitted:
         st.success(f"✅ Entry for {entry['Date'].date()} saved to GitHub!")
         df = load_data()
 
+
+# Date filter
+col1, col2 = st.columns(2)
+with col1:
+    start_date = st.date_input("Start Date", df["Date"].min() if not df.empty else date.today())
+with col2:
+    end_date = st.date_input("End Date", df["Date"].max() if not df.empty else date.today())
+
+filtered_df = df[(df["Date"] >= pd.to_datetime(start_date)) & (df["Date"] <= pd.to_datetime(end_date))]
+
+# Recent Logs
+st.subheader("🕒 Recent Logs")
+if not df.empty:
+    st.dataframe(df.sort_values("Date", ascending=False).head(3), use_container_width=True)
+else:
+    st.info("No entries yet!")
+
+# Line Charts
+if not filtered_df.empty:
+    st.subheader("📈 Time-Based Charts")
+    with col1:
+        fig1 = go.Figure()
+        fig1.add_trace(go.Scatter(x=filtered_df["Date"], y=filtered_df["Screen Time"], mode='lines+markers'))
+        fig1.update_layout(title="Screen Time", xaxis_title="Date", yaxis_title="Hours")
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=filtered_df["Date"], y=filtered_df["Study Time"], mode='lines+markers'))
+        fig2.update_layout(title="Study Time", xaxis_title="Date", yaxis_title="Hours")
+        st.plotly_chart(fig2, use_container_width=True)
+
+# Correlation Heatmap
+if len(filtered_df) > 1:
+    st.subheader("🔍 Correlation Heatmap")
+    numeric_df = filtered_df.select_dtypes(include='number')
+    if not numeric_df.empty:
+        corr = numeric_df.corr()
+        heatmap = ff.create_annotated_heatmap(
+            z=corr.values,
+            x=list(corr.columns),
+            y=list(corr.index),
+            colorscale='RdBu',
+            showscale=True
+        )
+        heatmap.update_layout(title="Numerical Correlation Heatmap")
+        st.plotly_chart(heatmap, use_container_width=True)
+    else:
+        st.info("No numeric data to show correlation.")
