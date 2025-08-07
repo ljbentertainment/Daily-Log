@@ -7,7 +7,7 @@ import os
 import base64
 import requests
 
-GITHUB_TOKEN = "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"
+
 REPO_OWNER = "ljbentertainment"
 REPO_NAME = "Daily-Log"
 FILE_PATH = "daily_log.csv"
@@ -185,3 +185,4 @@ if submitted:
     df = pd.concat([df, new_row], ignore_index=True)
     df.to_csv(CSV_FILE, index=False)
     st.success(f"✅ Entry for {entry['Date'].date()} saved!")
+
