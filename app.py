@@ -6,7 +6,9 @@ from datetime import datetime, date
 import base64
 import requests
 
-# GitHub Info from Streamlit secrets
+# --------------------
+# GitHub Info
+# --------------------
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO_OWNER = st.secrets["REPO_OWNER"]
 REPO_NAME = st.secrets["REPO_NAME"]
@@ -15,7 +17,6 @@ BRANCH = st.secrets["BRANCH"]
 
 CSV_FILE = "daily_log.csv"
 
-# Final columns
 COLUMNS = [
     "Date", "Weekday", "Ordinary Day", "Screen Time", "Study Time", "Study Quality (1-10)",
     "Meditation", "Morning Study", "Morning Phone", "Lunch Phone", "Dinner Phone", 
@@ -31,7 +32,9 @@ def hhmm_to_decimal(val):
     except:
         return val
 
+# --------------------
 # GitHub API helpers
+# --------------------
 def get_file_sha():
     url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
@@ -57,13 +60,8 @@ def upload_to_github(df, commit_message="Update daily_log.csv"):
         "branch": BRANCH
     }
     response = requests.put(url, headers=headers, json=data)
-    if response.status_code in [200, 201]:
-        return True
-    else:
-        st.error(f"❌ GitHub upload failed: {response.json()}")
-        return False
+    return response.status_code in [200, 201]
 
-# Load from GitHub file
 def load_data():
     url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/{FILE_PATH}"
     try:
@@ -72,20 +70,21 @@ def load_data():
         if "Morning Wake Up Hour" in df.columns:
             df["Morning Wake Up Hour"] = df["Morning Wake Up Hour"].apply(hhmm_to_decimal)
         return df
-    except Exception as e:
-        st.warning("⚠️ No data found or failed to load. Creating new DataFrame.")
+    except Exception:
         return pd.DataFrame(columns=COLUMNS)
 
-# Load or initialize data
-df = load_data()
+# --------------------
+# Init session state
+# --------------------
+if "df" not in st.session_state:
+    st.session_state.df = load_data()
 
+# --------------------
 # UI
+# --------------------
 st.set_page_config(page_title="Daily Log", layout="wide")
 st.title("📊 Daily Log Tracker")
 
-
-
-# Entry Form
 st.subheader("📝 Add New Entry")
 
 with st.form("log_form", clear_on_submit=True):
@@ -99,13 +98,12 @@ with st.form("log_form", clear_on_submit=True):
     def time_to_decimal(t):
         return round(t.hour + t.minute / 60, 2)
 
-    # Convert time inputs
     screen_time = time_to_decimal(screen_time_t)
     study_time = time_to_decimal(study_time_t)
     wakeup_decimal = time_to_decimal(wakeup_time)
 
     entry = {
-        "Date": entry_date,
+        "Date": pd.to_datetime(entry_date),
         "Weekday": pd.to_datetime(entry_date).strftime("%A"),
         "Ordinary Day": st.selectbox("Ordinary Day", ["Yes", "No"]),
         "Screen Time": screen_time,
@@ -126,14 +124,18 @@ with st.form("log_form", clear_on_submit=True):
     submitted = st.form_submit_button("Add Entry")
 
 if submitted:
-    entry["Date"] = pd.to_datetime(entry["Date"])
     new_row = pd.DataFrame([entry])
-    df = pd.concat([df, new_row], ignore_index=True)
+    # Update session dataframe immediately
+    st.session_state.df = pd.concat([st.session_state.df, new_row], ignore_index=True)
 
-    if upload_to_github(df):
+    # Push to GitHub
+    if upload_to_github(st.session_state.df):
         st.success(f"✅ Entry for {entry['Date'].date()} saved to GitHub!")
-        df = load_data()
 
+# --------------------
+# Analysis + Plots
+# --------------------
+df = st.session_state.df
 
 # Date filter
 col1, col2 = st.columns(2)
